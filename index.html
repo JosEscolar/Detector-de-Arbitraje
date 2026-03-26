@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlipRadar — Detector de arbitraje</title>
+<style>
+  :root {
+    --bg:        #0f0f11;
+    --surface:   #18181b;
+    --surface2:  #1f1f23;
+    --border:    #2a2a30;
+    --text:      #f0f0f2;
+    --muted:     #888892;
+    --green:     #22c55e;
+    --green-bg:  #14261e;
+    --amber:     #f59e0b;
+    --amber-bg:  #271f0a;
+    --blue:      #60a5fa;
+    --blue-bg:   #0f1f35;
+    --red:       #f87171;
+    --radius:    10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.5; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Layout */
+  .container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+  header { border-bottom: 1px solid var(--border); padding: 16px 0; }
+  .header-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  .logo { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .logo .accent { color: var(--green); }
+  .badge { font-size: 11px; background: var(--green-bg); color: var(--green); padding: 3px 8px; border-radius: 99px; font-weight: 600; margin-left: 8px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .last-update { font-size: 12px; color: var(--muted); }
+
+  /* Métricas */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 24px 0; }
+  @media(max-width:600px){ .metrics { grid-template-columns: repeat(2,1fr); } }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .metric-label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .metric-value { font-size: 26px; font-weight: 700; }
+  .metric-sub { font-size: 11px; color: var(--green); margin-top: 3px; }
+
+  /* Filtros */
+  .filters { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 20px; display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end; }
+  .filter-group { display: flex; flex-direction: column; gap: 6px; }
+  .filter-label { font-size: 12px; color: var(--muted); }
+  select { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 13px; cursor: pointer; outline: none; }
+  select:focus { border-color: var(--green); }
+  input[type=range] { accent-color: var(--green); width: 160px; cursor: pointer; }
+  .profit-val { font-size: 14px; font-weight: 600; color: var(--green); min-width: 40px; }
+  .refresh-btn { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 14px; font-size: 13px; cursor: pointer; transition: background .15s; margin-left: auto; }
+  .refresh-btn:hover { background: var(--border); }
+
+  /* Sección */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .section-title { font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+
+  /* Cards */
+  .cards { display: flex; flex-direction: column; gap: 10px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; display: flex; gap: 14px; align-items: flex-start; transition: border-color .15s, background .15s; }
+  .card:hover { border-color: #3a3a44; background: var(--surface2); }
+  .card.is-new { border-left: 3px solid var(--green); }
+
+  /* Miniatura */
+  .thumb { width: 72px; height: 72px; min-width: 72px; border-radius: 8px; overflow: hidden; background: var(--surface2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 30px; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  /* Contenido de la card */
+  .card-body { flex: 1; min-width: 0; }
+  .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 600; }
+  .tag-wallapop  { background: #2a1a0a; color: #f59e0b; }
+  .tag-milanuncios{ background: #0a2a0f; color: #4ade80; }
+  .tag-ebay      { background: #0a1a35; color: #60a5fa; }
+  .tag-vinted    { background: #1a0a2a; color: #c084fc; }
+  .tag-new       { background: var(--green-bg); color: var(--green); }
+  .card-title { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+  .card-meta  { font-size: 12px; color: var(--muted); }
+  .prices { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+  .price-item { font-size: 13px; }
+  .price-item .label { color: var(--muted); }
+  .price-item .value { font-weight: 600; color: var(--text); }
+  .arrow { color: var(--muted); font-size: 12px; }
+  .profit-net { font-size: 12px; color: var(--green); margin-top: 4px; }
+
+  /* Derecha de la card */
+  .card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 76px; }
+  .profit-badge { font-size: 15px; font-weight: 700; padding: 5px 10px; border-radius: 6px; white-space: nowrap; }
+  .profit-high   { background: var(--green-bg);  color: var(--green); }
+  .profit-mid    { background: var(--amber-bg);  color: var(--amber); }
+  .profit-low    { background: var(--surface2);  color: var(--muted); }
+  .ebay-link { font-size: 12px; color: var(--blue); padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; white-space: nowrap; transition: background .15s; }
+  .ebay-link:hover { background: var(--blue-bg); text-decoration: none; }
+
+  /* Empty / loading */
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .loading { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Alert banner */
+  .alert { background: var(--green-bg); border: 1px solid #1a4a2a; border-radius: var(--radius); padding: 12px 16px; font-size: 13px; color: var(--green); display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+  .alert svg { min-width: 16px; }
+  .alert.hidden { display: none; }
+
+  footer { border-top: 1px solid var(--border); padding: 20px 0; margin-top: 40px; text-align: center; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <div class="header-inner">
+      <div>
+        <span class="logo">Flip<span class="accent">Radar</span><span class="badge" id="live-badge">EN VIVO</span></span>
+      </div>
+      <div class="last-update" id="last-update">Cargando datos...</div>
+    </div>
+  </div>
+</header>
+
+<main class="container" style="padding-top:24px;padding-bottom:40px;">
+
+  <div class="alert hidden" id="new-alert">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/>
+      <path d="M8 5v4M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <span id="new-alert-text"></span>
+  </div>
+
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-label">Oportunidades activas</div>
+      <div class="metric-value" id="m-total">—</div>
+      <div class="metric-sub" id="m-new">cargando...</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Ganancia media</div>
+      <div class="metric-value" id="m-avg">—</div>
+      <div class="metric-sub">estimada</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Mayor margen</div>
+      <div class="metric-value" id="m-max">—</div>
+      <div class="metric-sub" id="m-max-name">—</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Ganancia mínima filtro</div>
+      <div class="metric-value" id="m-filter">—</div>
+      <div class="metric-sub">configurada</div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">Ganancia mínima</span>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input type="range" min="0" max="100" value="20" step="5" id="f-profit" oninput="applyFilters()">
+        <span class="profit-val" id="f-profit-val">+20%</span>
+      </div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Categoría</span>
+      <select id="f-cat" onchange="applyFilters()">
+        <option value="">Todas las categorías</option>
+        <option value="tech">Tecnología</option>
+        <option value="sneakers">Sneakers</option>
+        <option value="fashion">Moda</option>
+        <option value="home">Hogar</option>
+        <option value="collectibles">Coleccionismo</option>
+        <option value="watches">Relojes</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Ordenar por</span>
+      <select id="f-sort" onchange="applyFilters()">
+        <option value="profit_pct">Mayor % ganancia</option>
+        <option value="profit_eur">Mayor € ganancia</option>
+        <option value="recent">Más reciente</option>
+      </select>
+    </div>
+    <button class="refresh-btn" onclick="loadData()">↻ Actualizar</button>
+  </div>
+
+  <div class="section-header">
+    <span class="section-title" id="results-label">Cargando...</span>
+  </div>
+
+  <div id="cards-container">
+    <div class="loading">
+      <div class="spinner"></div>
+      Cargando oportunidades...
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <div class="container">
+    FlipRadar — Los precios de compra son <strong>estimados</strong>. Verifica siempre antes de comprar.
+    Descuenta comisiones de eBay (~13%) y envío antes de decidir.
+  </div>
+</footer>
+
+<script>
+const EMOJIS = {
+  tech: "📱", sneakers: "👟", fashion: "🧥",
+  home: "🏠", collectibles: "🧱", watches: "⌚", default: "📦"
+};
+
+let allData = { opportunities: [] };
+
+function timeAgo(isoStr) {
+  const diff = Math.floor((Date.now() - new Date(isoStr + "Z").getTime()) / 60000);
+  if (diff < 1)  return "hace un momento";
+  if (diff < 60) return `hace ${diff} min`;
+  const h = Math.floor(diff / 60);
+  if (h < 24)    return `hace ${h}h`;
+  return `hace ${Math.floor(h/24)}d`;
+}
+
+function profitClass(pct) {
+  if (pct >= 50) return "profit-high";
+  if (pct >= 30) return "profit-mid";
+  return "profit-low";
+}
+
+function renderCards(opps) {
+  const container = document.getElementById("cards-container");
+
+  if (opps.length === 0) {
+    container.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">🔍</div>
+        <div>Sin resultados con estos filtros.</div>
+        <div style="margin-top:6px;font-size:13px;">Prueba bajando el porcentaje mínimo.</div>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = opps.map(op => {
+    const emoji = EMOJIS[op.category] || EMOJIS.default;
+    const imgHtml = op.imageUrl
+      ? `<img src="${op.imageUrl}" alt="${op.name}" onerror="this.style.display='none';this.nextSibling.style.display='flex'">`
+      : "";
+    const fallback = `<span style="display:${op.imageUrl ? 'none' : 'flex'};font-size:28px;width:100%;height:100%;align-items:center;justify-content:center;">${emoji}</span>`;
+
+    const netProfit = Math.round(op.sellPrice * 0.84 - op.buyPrice); // descontando ~16% comisiones
+
+    return `
+    <div class="card ${op.isNew ? 'is-new' : ''}">
+      <div class="thumb">${imgHtml}${fallback}</div>
+      <div class="card-body">
+        <div class="card-header">
+          <span class="tag tag-wallapop">Comprar en Wallapop/Milanuncios</span>
+          ${op.isNew ? '<span class="tag tag-new">NUEVO</span>' : ''}
+        </div>
+        <div class="card-title" title="${op.name}">${op.name}</div>
+        <div class="card-meta">${op.condition || "Usado"} · Detectado ${timeAgo(op.foundAt)}</div>
+        <div class="prices">
+          <div class="price-item"><span class="label">Precio estimado compra: </span><span class="value">${op.buyPrice}€</span></div>
+          <span class="arrow">→</span>
+          <div class="price-item"><span class="label">Venta en eBay: </span><span class="value">~${op.sellPrice}€</span></div>
+        </div>
+        <div class="profit-net">Beneficio neto estimado (tras comisiones eBay ~16%): ~${netProfit}€</div>
+      </div>
+      <div class="card-right">
+        <div class="profit-badge ${profitClass(op.profitPct)}">+${op.profitPct}%</div>
+        ${op.ebayUrl ? `<a href="${op.ebayUrl}" target="_blank" class="ebay-link">Ver en eBay ↗</a>` : ''}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function applyFilters() {
+  const minProfit = parseInt(document.getElementById("f-profit").value);
+  const cat       = document.getElementById("f-cat").value;
+  const sortBy    = document.getElementById("f-sort").value;
+  document.getElementById("f-profit-val").textContent = "+" + minProfit + "%";
+
+  let filtered = allData.opportunities.filter(op =>
+    op.profitPct >= minProfit && (!cat || op.category === cat)
+  );
+
+  if (sortBy === "profit_pct") filtered.sort((a,b) => b.profitPct - a.profitPct);
+  else if (sortBy === "profit_eur") filtered.sort((a,b) => b.profitEur - a.profitEur);
+  else filtered.sort((a,b) => new Date(b.foundAt) - new Date(a.foundAt));
+
+  document.getElementById("results-label").textContent =
+    `${filtered.length} oportunidad${filtered.length !== 1 ? 'es' : ''} encontrada${filtered.length !== 1 ? 's' : ''}`;
+
+  // Actualizar métricas con los filtrados
+  if (filtered.length > 0) {
+    const profits = filtered.map(o => o.profitPct);
+    const avg = Math.round(profits.reduce((a,b)=>a+b,0)/profits.length);
+    const maxOp = filtered.reduce((a,b) => a.profitPct > b.profitPct ? a : b);
+    document.getElementById("m-total").textContent = filtered.length;
+    document.getElementById("m-avg").textContent = avg + "%";
+    document.getElementById("m-max").textContent = maxOp.profitPct + "%";
+    document.getElementById("m-max-name").textContent = maxOp.name.split(" ").slice(0,3).join(" ");
+  }
+
+  renderCards(filtered);
+}
+
+async function loadData() {
+  document.getElementById("cards-container").innerHTML =
+    '<div class="loading"><div class="spinner"></div>Actualizando...</div>';
+
+  try {
+    // Añadimos timestamp para evitar caché del navegador
+    const res = await fetch("data/opportunities.json?t=" + Date.now());
+    if (!res.ok) throw new Error("No se pudo cargar el JSON");
+    allData = await res.json();
+
+    // Actualizar cabecera
+    const updated = new Date(allData.lastUpdated + "Z");
+    document.getElementById("last-update").textContent =
+      "Actualizado " + timeAgo(allData.lastUpdated);
+
+    // Métricas globales
+    document.getElementById("m-filter").textContent = "+" + (allData.minProfitPct || 30) + "%";
+    const newCount = allData.newCount || 0;
+    document.getElementById("m-new").textContent =
+      newCount > 0 ? `+${newCount} nuevas` : "sin novedades";
+
+    // Banner de nuevas oportunidades
+    const alertEl = document.getElementById("new-alert");
+    if (newCount > 0) {
+      document.getElementById("new-alert-text").textContent =
+        `${newCount} nueva${newCount>1?'s':''} oportunidad${newCount>1?'es':''} detectada${newCount>1?'s':''} en el último rastreo`;
+      alertEl.classList.remove("hidden");
+    } else {
+      alertEl.classList.add("hidden");
+    }
+
+    applyFilters();
+
+  } catch (err) {
+    document.getElementById("cards-container").innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">⚠️</div>
+        <div>Error al cargar los datos.</div>
+        <div style="margin-top:6px;font-size:13px;color:var(--muted);">
+          Asegúrate de haber ejecutado el scraper al menos una vez.<br>
+          Si acabas de crear el repositorio, espera a que GitHub Actions lo ejecute.
+        </div>
+      </div>`;
+    document.getElementById("last-update").textContent = "Sin datos aún";
+  }
+}
+
+// Cargar al iniciar
+loadData();
+
+// Auto-refrescar cada 5 minutos
+setInterval(loadData, 5 * 60 * 1000);
+</script>
+</body>
+</html>

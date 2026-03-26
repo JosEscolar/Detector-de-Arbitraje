@@ -1,0 +1,42 @@
+name: FlipRadar — Rastreo automático
+
+on:
+  schedule:
+    # Ejecutar cada hora (minuto 0 de cada hora)
+    - cron: '0 * * * *'
+  # Permite ejecutarlo manualmente desde GitHub
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write   # necesario para hacer commit del JSON
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Ejecutar FlipRadar scraper
+        env:
+          EBAY_CLIENT_ID:      ${{ secrets.EBAY_CLIENT_ID }}
+          EBAY_CLIENT_SECRET:  ${{ secrets.EBAY_CLIENT_SECRET }}
+          GMAIL_USER:          ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD:  ${{ secrets.GMAIL_APP_PASSWORD }}
+          ALERT_EMAIL:         ${{ secrets.ALERT_EMAIL }}
+          MIN_PROFIT_PCT:      ${{ secrets.MIN_PROFIT_PCT }}
+        run: python scraper.py
+
+      - name: Guardar resultados en el repositorio
+        run: |
+          git config user.name  "FlipRadar Bot"
+          git config user.email "flipradar-bot@users.noreply.github.com"
+          git add data/opportunities.json
+          git diff --staged --quiet || git commit -m "chore: actualizar oportunidades $(date -u '+%Y-%m-%d %H:%M') UTC"
+          git push
